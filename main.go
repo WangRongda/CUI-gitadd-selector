@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"os/exec"
 	"strings"
@@ -10,12 +9,23 @@ import (
 	ui "github.com/gizak/termui"
 )
 
-type itemers []struct {
+type itemers []itemer
+type itemer struct {
 	filePath       string
 	children       []uint // if item is a file(leaf), the value is nil; if item is a directory, the value is a list which save the subitem index
 	parent         []uint // root is nil, record item's directory item index
 	selectedStatus int    // 0 (unselected for file and unselected all file for directory), 1(selected), 2(only for directory status, mean some file selected)
 	gitStatus      rune   // 'M'(modified), 'D'(deleted), '?'(untracked)
+	// uiStr string
+}
+
+func (i itemer) colorSelectColor {
+	uiStr = "  [" + string(items[i].gitStatus) + "] " + items[i].filePath
+	selectedWrap := "[%s](bg-red,fg-black)"
+}
+
+func (i itemer) unColorSelect {
+
 }
 
 func main() {
@@ -29,20 +39,15 @@ func main() {
 }
 
 func getItems() itemers {
-	cmd := `git status --porcelain | grep -E "^.\S+.*$"`
-	// output example:
-	//MM main.go
+	cmd := `git status --porcelain | grep -E "^.\S+.*$"` //grep: The second letter must not be blank,that meaning filter the item need to add
+	// linux console output example:
+	//MM main.go (First M：Changes to be committed; Second M: Changes not staged for commit)
 	//?? test.go
 	// D test2.go
-	output, err := exec.Command("/bin/bash", "-c", cmd).Output()
-	if nil != err {
-		log.Fatal(err)
-	}
-	outputList := strings.Split(string(output), "\n")
-	//一般结尾多了个空""
-	if len(outputList) > 0 && "" == outputList[len(outputList)-1] {
-		outputList = outputList[:len(outputList)-1]
-	}
+	outputByte, err := exec.Command("/bin/bash", "-c", cmd).Output()
+	errPanic(err)
+	output := string(outputByte)
+	outputList := strings.Split(output[:len(output)-1], "\n")
 
 	items := make(itemers, len(outputList))
 	for i, outputline := range outputList {
@@ -63,9 +68,7 @@ func (i itemers) gitadd() error {
 	}
 	fmt.Println(cmd)
 	output, err := exec.Command("/bin/bash", "-c", cmd).Output()
-	if nil != err {
-		log.Fatal(output, err)
-	}
+	errPanic(err, output)
 	return nil
 }
 
@@ -82,10 +85,7 @@ func (i itemers) unselectall() {
 }
 
 func (i itemers) startUI(strs []string) {
-	err := ui.Init()
-	if err != nil {
-		panic(err)
-	}
+	errPanic(ui.Init())
 	defer ui.Close()
 
 	// strs := []string{
@@ -123,7 +123,7 @@ func (i itemers) startUI(strs []string) {
 
 	n := 0 //当前行, selected num
 	shift := 0
-	selectedWrap := "[%s](bg-red,fg-bold)"
+	selectedWrap := "[%s](bg-red,fg-black)"
 	l.Items[0] = fmt.Sprintf(selectedWrap, l.Items[0])
 	ui.Render(l) // feel free to call Render, it's async and non-block
 
@@ -156,7 +156,7 @@ func (i itemers) startUI(strs []string) {
 		} else if n >= len(l.Items)-1 {
 			return
 		}
-		l.Items[n] = l.Items[n][1 : len(l.Items[n])-17]
+		l.Items[n] = l.Items[n][1 : len(l.Items[n])-18]
 		n++
 		l.Items[n] = fmt.Sprintf(selectedWrap, l.Items[n])
 		ui.Render(l)
@@ -180,4 +180,11 @@ func (i itemers) startUI(strs []string) {
 		ui.Render(l)
 	})
 	ui.Loop() // block until StopLoop is called
+}
+
+func errPanic(err error, args ...interface{}) {
+	if err != nil {
+		panicStr := fmt.Sprintf("%s\n%v", err.Error(), args)
+		panic(panicStr)
+	}
 }
